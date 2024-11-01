@@ -11,6 +11,7 @@ authors = [
 dependencies = [
     "make87",
     "make87_messages",
+    "torch",
     "onnxruntime-gpu ; platform_machine == 'x86_64'",
     "onnxruntime ; platform_machine != 'x86_64'",
     "opencv-python-headless",
