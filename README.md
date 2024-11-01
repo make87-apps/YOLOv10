@@ -1,4 +1,3 @@
-# Depth Anything Large
+# YOLOv10
 
-Based on Hugging Face's 🤗 [implementation](https://huggingface.co/LiheYoung/depth-anything-small-hf)
 
