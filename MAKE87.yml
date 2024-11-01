@@ -1,0 +1,12 @@
+build_kit:
+  name: python3
+  version: latest
+inbound_topics:
+  - name: IMAGE_DATA
+    message_type: make87_messages.image.compressed.image_jpeg.ImageJPEG
+outbound_topics:
+  - name: BOUNDING_BOXES
+    message_type: make87_messages.geometry.box.boxes_2d.Boxes2DAxisAligned
+peripheral_requirements:
+  - name: GPU
+    peripheral_type: GPU
