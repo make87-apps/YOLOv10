@@ -4,7 +4,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 import onnxruntime
-from make87 import initialize, get_subscriber_topic, get_publisher_topic, resolve_topic_name
+from make87 import initialize, get_subscriber, get_publisher, resolve_topic_name
 from make87_messages.geometry.box.box_2d_pb2 import Box2DAxisAligned
 from make87_messages.geometry.box.boxes_2d_pb2 import Boxes2DAxisAligned
 from make87_messages.image.compressed.image_jpeg_pb2 import ImageJPEG
@@ -93,8 +93,8 @@ def main():
 
     input_topic_name = resolve_topic_name(name="IMAGE_DATA")
     output_topic_name = resolve_topic_name(name="BOUNDING_BOXES")
-    input_topic = get_subscriber_topic(name=input_topic_name, message_type=ImageJPEG)
-    output_topic = get_publisher_topic(name=output_topic_name, message_type=Boxes2DAxisAligned)
+    input_topic = get_subscriber(name=input_topic_name, message_type=ImageJPEG)
+    output_topic = get_publisher(name=output_topic_name, message_type=Boxes2DAxisAligned)
 
     # Access the 'preprocessor_config.json' file within 'app.hf' package
     yolov10onnx = files("app") / "hf" / "yolov10b.onnx"
