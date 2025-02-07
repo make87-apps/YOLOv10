@@ -4,10 +4,12 @@ from pathlib import Path
 import cv2
 import numpy as np
 import onnxruntime
-from make87 import initialize, get_subscriber, get_publisher, resolve_topic_name
+from make87_messages.core.header_pb2 import Header
+import make87 as m87
 from make87_messages.geometry.box.box_2d_pb2 import Box2DAxisAligned
 from make87_messages.geometry.box.boxes_2d_pb2 import Boxes2DAxisAligned
 from make87_messages.image.compressed.image_jpeg_pb2 import ImageJPEG
+
 
 
 class YOLOv10:
@@ -89,12 +91,12 @@ class YOLOv10:
 
 
 def main():
-    initialize()
+    m87.initialize()
 
-    input_topic_name = resolve_topic_name(name="IMAGE_DATA")
-    output_topic_name = resolve_topic_name(name="BOUNDING_BOXES")
-    input_topic = get_subscriber(name=input_topic_name, message_type=ImageJPEG)
-    output_topic = get_publisher(name=output_topic_name, message_type=Boxes2DAxisAligned)
+    input_topic = m87.get_subscriber(name="IMAGE_DATA", message_type=ImageJPEG)
+    output_topic = m87.get_publisher(name="BOUNDING_BOXES", message_type=Boxes2DAxisAligned)
+    boxes_entity_name = m87.get_config_value("BOXES_ENTITY_NAME", "boxes", str)
+    verbose = m87.get_config_value("VERBOSE", False, bool)
 
     # Access the 'preprocessor_config.json' file within 'app.hf' package
     yolov10onnx = files("app") / "hf" / "yolov10b.onnx"
@@ -108,7 +110,7 @@ def main():
 
         class_ids, boxes, confidences = detector(np.array(image))
 
-        boxes2d = Boxes2DAxisAligned(timestamp=message.timestamp)
+        boxes2d = Boxes2DAxisAligned(timestamp=message.timestamp, header=m87.header_from_message(Header, message=message, append_entity_path=boxes_entity_name, set_current_time=True))
 
         for box, class_id, confidence in zip(boxes, class_ids, confidences):
             box2d = Box2DAxisAligned(
@@ -121,8 +123,8 @@ def main():
             boxes2d.boxes.append(box2d)
 
         output_topic.publish(boxes2d)
-
-        print(f"Published {len(boxes2d.boxes)} boxes")
+        if verbose:
+            print(f"Published {len(boxes2d.boxes)} boxes")
 
     input_topic.subscribe(callback)
 
