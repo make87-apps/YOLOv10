@@ -22,3 +22,4 @@ config:
       default_value: "false"
       required: false
       secret: false
+      secret: false
