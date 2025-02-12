@@ -6,10 +6,9 @@ import numpy as np
 import onnxruntime
 from make87_messages.core.header_pb2 import Header
 import make87 as m87
-from make87_messages.geometry.box.box_2d_pb2 import Box2DAxisAligned
-from make87_messages.geometry.box.boxes_2d_pb2 import Boxes2DAxisAligned
+from make87_messages.geometry.box.box_2d_aligned_pb2 import Box2DAxisAligned
+from make87_messages.geometry.box.boxes_2d_aligned_pb2 import Boxes2DAxisAligned
 from make87_messages.image.compressed.image_jpeg_pb2 import ImageJPEG
-
 
 
 class YOLOv10:
