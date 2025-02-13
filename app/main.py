@@ -17,8 +17,10 @@ class YOLOv10:
 
         self.conf_threshold = conf_thres
 
+        available_providers = onnxruntime.get_available_providers()
+        print(f"Available providers: {available_providers}")
         # Initialize model
-        self.session = onnxruntime.InferenceSession(path, providers=onnxruntime.get_available_providers())
+        self.session = onnxruntime.InferenceSession(path, providers=available_providers)
 
         # Get model info
         self.get_input_details()

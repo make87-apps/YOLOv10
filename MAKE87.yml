@@ -1,5 +1,5 @@
 build_kit:
-  name: python3_cuda
+  name: python3
   version: latest
 inbound_topics:
   - name: IMAGE_DATA
