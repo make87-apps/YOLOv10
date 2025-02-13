@@ -135,6 +135,8 @@ def main():
 
     input_topic.subscribe(callback)
 
+    m87.loop()
+
 
 if __name__ == "__main__":
     main()
