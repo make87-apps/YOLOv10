@@ -1,3 +1,4 @@
+import json
 from importlib.resources import files
 from pathlib import Path
 
@@ -5,9 +6,12 @@ import cv2
 import make87 as m87
 import numpy as np
 import onnxruntime
+from make87_messages.core.empty_pb2 import Empty
 from make87_messages.core.header_pb2 import Header
-from make87_messages.geometry.box.box_2d_aligned_pb2 import Box2DAxisAligned
-from make87_messages.geometry.box.boxes_2d_aligned_pb2 import Boxes2DAxisAligned
+from make87_messages.detection.box.boxes_2d_pb2 import Boxes2DAxisAligned
+from make87_messages.detection.box.box_2d_pb2 import Box2DAxisAligned
+from make87_messages.geometry.box.box_2d_aligned_pb2 import Box2DAxisAligned as Box2DAxisAlignedGeometry
+from make87_messages.detection.ontology.model_ontology_pb2 import ModelOntology
 from make87_messages.image.compressed.image_jpeg_pb2 import ImageJPEG
 
 
@@ -93,47 +97,82 @@ class YOLOv10:
 
 def main():
     m87.initialize()
-
-    input_topic = m87.get_subscriber(name="IMAGE_DATA", message_type=ImageJPEG)
-    output_topic = m87.get_publisher(name="BOUNDING_BOXES", message_type=Boxes2DAxisAligned)
     boxes_entity_name = m87.get_config_value("BOXES_ENTITY_NAME", "boxes", str)
-    verbose = m87.get_config_value("VERBOSE", False, bool)
+
+    ontology_endpoint = m87.get_provider(
+        name="MODEL_ONTOLOGY", requester_message_type=Empty, provider_message_type=ModelOntology
+    )
+
+    jpeg_subscriber = m87.get_subscriber(name="IMAGE_DATA", message_type=ImageJPEG)
+    detections_publisher = m87.get_publisher(name="BOUNDING_BOXES", message_type=Boxes2DAxisAligned)
+
+    detections_endpoint = m87.get_provider(
+        name="DETECTIONS", requester_message_type=ImageJPEG, provider_message_type=Boxes2DAxisAligned
+    )
 
     # Access the 'preprocessor_config.json' file within 'app.hf' package
     yolov10onnx = files("app") / "hf" / "yolov10b.onnx"
     yolov10onnx = Path(str(yolov10onnx))
 
-    detector = YOLOv10(yolov10onnx)
+    yolov10config = files("app") / "hf" / "config.json"
+    yolov10config = Path(str(yolov10config))
 
-    def callback(message: ImageJPEG):
+    detector = YOLOv10(yolov10onnx)
+    with open(yolov10config) as f:
+        config = json.load(f)
+
+    # Setup ontology provider
+    def ontology_callback(message: Empty) -> ModelOntology:
+        header = Header()
+        header.timestamp.GetCurrentTime()
+        class_entries = [
+            ModelOntology.ClassEntry(
+                id=int(class_id),
+                label=class_label,
+            )
+            for class_id, class_label in config["id2label"].items()
+        ]
+        return ModelOntology(header=header, classes=class_entries)
+
+    ontology_endpoint.provide(ontology_callback)
+
+    # Setup pub/sub + provider
+    def detections_callback(message: ImageJPEG) -> Boxes2DAxisAligned:
+        # Convert message data to an image
         jpeg_array = np.frombuffer(message.data, dtype=np.uint8)
         image = cv2.imdecode(jpeg_array, cv2.IMREAD_UNCHANGED)
 
+        # Run detection on the image
         class_ids, boxes, confidences = detector(np.array(image))
 
-        boxes2d = Boxes2DAxisAligned(
-            header=m87.header_from_message(
-                Header,
-                message=message,
-                append_entity_path=boxes_entity_name,
-            )
+        header = m87.header_from_message(
+            Header,
+            message=message,
+            append_entity_path=boxes_entity_name,
         )
 
-        for box, class_id, confidence in zip(boxes, class_ids, confidences):
-            box2d = Box2DAxisAligned(
-                x=box[0],
-                y=box[1],
-                width=box[2] - box[0],
-                height=box[3] - box[1],
-            )
+        # Create the detection message
+        boxes2d = Boxes2DAxisAligned(
+            header=header,
+            boxes=[
+                Box2DAxisAligned(
+                    geometry=Box2DAxisAlignedGeometry(
+                        header=header,
+                        x=box[0],
+                        y=box[1],
+                        width=box[2] - box[0],
+                        height=box[3] - box[1],
+                    ),
+                    confidence=confidence,
+                    class_id=class_id,
+                )
+                for box, class_id, confidence in zip(boxes, class_ids, confidences)
+            ],
+        )
+        return boxes2d
 
-            boxes2d.boxes.append(box2d)
-
-        output_topic.publish(boxes2d)
-        if verbose:
-            print(f"Published {len(boxes2d.boxes)} boxes")
-
-    input_topic.subscribe(callback)
+    jpeg_subscriber.subscribe(lambda msg: detections_publisher.publish(detections_callback(msg)))
+    detections_endpoint.provide(detections_callback)
 
     m87.loop()
 

@@ -3,10 +3,17 @@ build_kit:
   version: latest
 inbound_topics:
   - name: IMAGE_DATA
-    message_type: make87_messages.image.compressed.image_jpeg.ImageJPEG:0.0.82
+    message_type: make87_messages.image.compressed.image_jpeg.ImageJPEG
 outbound_topics:
   - name: BOUNDING_BOXES
-    message_type: make87_messages.geometry.box.boxes_2d_aligned.Boxes2DAxisAligned:0.0.82
+    message_type: make87_messages.detection.box.boxes_2d.Boxes2DAxisAligned
+provider_endpoints:
+  - name: DETECTIONS
+    requester_message_type: make87_messages.image.compressed.image_jpeg.ImageJPEG
+    provider_message_type: make87_messages.detection.box.boxes_2d.Boxes2DAxisAligned
+  - name: MODEL_ONTOLOGY
+    requester_message_type: make87_messages.core.Empty
+    provider_message_type: make87_messages.detection.ontology.ModelOntology
 peripheral_requirements:
   - name: GPU
     peripheral_type: GPU
@@ -15,10 +22,5 @@ config:
     - name: BOXES_ENTITY_NAME
       description: "The name to append to the source entity path"
       default_value: "boxes"
-      required: false
-      secret: false
-    - name: VERBOSE
-      description: "If you want verbose logging"
-      default_value: "false"
       required: false
       secret: false
