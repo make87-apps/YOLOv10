@@ -22,6 +22,8 @@ class YOLOv10:
         self.conf_threshold = conf_thres
 
         available_providers = onnxruntime.get_available_providers()
+        # only keep providers with "CPU" in the name until gpu mount is properly supported
+        available_providers = [provider for provider in available_providers if "CPU" in provider]
         print(f"Available providers: {available_providers}")
         # Initialize model
         self.session = onnxruntime.InferenceSession(path, providers=available_providers)
@@ -87,8 +89,8 @@ class YOLOv10:
         self.input_names = [model_inputs[i].name for i in range(len(model_inputs))]
 
         input_shape = model_inputs[0].shape
-        self.input_height = input_shape[2] if type(input_shape[2]) == int else 640
-        self.input_width = input_shape[3] if type(input_shape[3]) == int else 640
+        self.input_height = input_shape[2] if isinstance(input_shape[2], int) else 640
+        self.input_width = input_shape[3] if isinstance(input_shape[3], int) else 640
 
     def get_output_details(self):
         model_outputs = self.session.get_outputs()
