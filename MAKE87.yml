@@ -14,9 +14,9 @@ provider_endpoints:
   - name: MODEL_ONTOLOGY
     requester_message_type: make87_messages.core.Empty
     provider_message_type: make87_messages.detection.ontology.ModelOntology
-peripheral_requirements:
-  - name: GPU
-    peripheral_type: GPU
+#peripheral_requirements:
+#  - name: GPU
+#    peripheral_type: GPU
 config:
   values:
     - name: BOXES_ENTITY_NAME
