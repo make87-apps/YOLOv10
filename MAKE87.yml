@@ -24,3 +24,8 @@ config:
       default_value: "boxes"
       required: false
       secret: false
+    - name: CONFIDENCE_THRESHOLD
+      description: "The minimum confidence threshold for a detection to be considered valid. Default: 0.6"
+      default_value: "0.6"
+      required: false
+      secret: false

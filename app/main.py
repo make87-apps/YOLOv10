@@ -100,6 +100,7 @@ class YOLOv10:
 def main():
     m87.initialize()
     boxes_entity_name = m87.get_config_value("BOXES_ENTITY_NAME", "boxes", str)
+    conf_threshold = m87.get_config_value("CONFIDENCE_THRESHOLD", 0.6, float)
 
     ontology_endpoint = m87.get_provider(
         name="MODEL_ONTOLOGY", requester_message_type=Empty, provider_message_type=ModelOntology
@@ -119,7 +120,7 @@ def main():
     yolov10config = files("app") / "hf" / "config.json"
     yolov10config = Path(str(yolov10config))
 
-    detector = YOLOv10(yolov10onnx)
+    detector = YOLOv10(yolov10onnx, conf_thres=conf_threshold)
     with open(yolov10config) as f:
         config = json.load(f)
 
