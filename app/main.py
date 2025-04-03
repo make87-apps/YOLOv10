@@ -3,7 +3,7 @@ from importlib.resources import files
 from pathlib import Path
 
 import cv2
-import make87 as m87
+import make87
 import numpy as np
 import onnxruntime
 from make87_messages.core.empty_pb2 import Empty
@@ -98,18 +98,18 @@ class YOLOv10:
 
 
 def main():
-    m87.initialize()
-    boxes_entity_name = m87.get_config_value("BOXES_ENTITY_NAME", "boxes", str)
-    conf_threshold = m87.get_config_value("CONFIDENCE_THRESHOLD", 0.6, float)
+    make87.initialize()
+    boxes_entity_name = make87.get_config_value("BOXES_ENTITY_NAME", "boxes", str)
+    conf_threshold = make87.get_config_value("CONFIDENCE_THRESHOLD", 0.6, float)
 
-    ontology_endpoint = m87.get_provider(
+    ontology_endpoint = make87.get_provider(
         name="MODEL_ONTOLOGY", requester_message_type=Empty, provider_message_type=ModelOntology
     )
 
-    jpeg_subscriber = m87.get_subscriber(name="IMAGE_DATA", message_type=ImageJPEG)
-    detections_publisher = m87.get_publisher(name="BOUNDING_BOXES", message_type=Boxes2DAxisAligned)
+    jpeg_subscriber = make87.get_subscriber(name="IMAGE_DATA", message_type=ImageJPEG)
+    detections_publisher = make87.get_publisher(name="BOUNDING_BOXES", message_type=Boxes2DAxisAligned)
 
-    detections_endpoint = m87.get_provider(
+    detections_endpoint = make87.get_provider(
         name="DETECTIONS", requester_message_type=ImageJPEG, provider_message_type=Boxes2DAxisAligned
     )
 
@@ -148,7 +148,7 @@ def main():
         # Run detection on the image
         class_ids, boxes, confidences = detector(np.array(image))
 
-        header = m87.header_from_message(
+        header = make87.header_from_message(
             Header,
             message=message,
             append_entity_path=boxes_entity_name,
@@ -177,7 +177,7 @@ def main():
     jpeg_subscriber.subscribe(lambda msg: detections_publisher.publish(detections_callback(msg)))
     detections_endpoint.provide(detections_callback)
 
-    m87.loop()
+    make87.loop()
 
 
 if __name__ == "__main__":

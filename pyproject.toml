@@ -6,15 +6,15 @@ build-backend = "setuptools.build_meta"
 name = "app"
 version = "0.0.1"
 authors = [
-    { name = "Nisse Knudsen", email = "nisse.knudsen@gmail.com" },
+    { name = "Nisse Knudsen", email = "nisse@make87.com" },
 ]
 dependencies = [
     "make87",
     "make87_messages",
-    "torch",
-    "onnxruntime-gpu ; platform_machine == 'x86_64'",
-    "onnxruntime ; platform_machine != 'x86_64'",
-    "opencv-python-headless",
+#    "onnxruntime-gpu ; platform_machine == 'x86_64'",
+#    "onnxruntime ; platform_machine != 'x86_64'",
+    "onnxruntime",
+    "opencv-python-headless>=4.10.0,<5.0.0",
     "numpy",
 ]
 description = "A small example package"
