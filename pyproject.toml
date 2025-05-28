@@ -9,11 +9,9 @@ authors = [
     { name = "Nisse Knudsen", email = "nisse@make87.com" },
 ]
 dependencies = [
-    "make87",
+    "make87<=0.1.0",
     "make87_messages",
-#    "onnxruntime-gpu ; platform_machine == 'x86_64'",
-#    "onnxruntime ; platform_machine != 'x86_64'",
-    "onnxruntime",
+    "onnxruntime-gpu",
     "opencv-python-headless>=4.10.0,<5.0.0",
     "numpy",
 ]

@@ -23,7 +23,7 @@ class YOLOv10:
 
         available_providers = onnxruntime.get_available_providers()
         # only keep providers with "CPU" in the name until gpu mount is properly supported
-        available_providers = [provider for provider in available_providers if "CPU" in provider]
+        available_providers = [provider for provider in available_providers if "CUDA" in provider]
         print(f"Available providers: {available_providers}")
         # Initialize model
         self.session = onnxruntime.InferenceSession(path, providers=available_providers)
