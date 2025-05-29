@@ -1,6 +1,7 @@
 build_kit:
   name: python3_cuda
   version: latest
+  target_architectures: ["amd64"]
 inbound_topics:
   - name: IMAGE_DATA
     message_type: make87_messages.image.compressed.image_jpeg.ImageJPEG
