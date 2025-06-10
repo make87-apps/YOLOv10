@@ -5,6 +5,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 import onnxruntime
+import logging
 from make87.config import load_config_from_env
 from make87.encodings import ProtobufEncoder
 from make87.interfaces.zenoh import ZenohInterface
@@ -27,6 +28,7 @@ class YOLOv10:
             providers = ["CUDAExecutionProvider"]
         else:
             providers = ["CPUExecutionProvider"]
+        logging.info(f"Available providers: {available_providers}, using: {providers}")
         self.session = onnxruntime.InferenceSession(str(path), providers=providers)
 
         self.get_input_details()
@@ -113,6 +115,7 @@ def extract_image_from_raw_any(msg: ImageRawAny) -> np.ndarray:
         bgr = cv2.cvtColor(yuv, cv2.COLOR_YUV2BGR)
         return bgr
     else:
+        logging.error("No supported image format found in ImageRawAny")
         raise ValueError("No supported image format found in ImageRawAny")
 
 
@@ -129,7 +132,11 @@ def main():
 
     # Providers / Subscribers / Publishers
     ontology_provider = zenoh_interface.get_provider("MODEL_ONTOLOGY")
-    raw_any_subscriber = zenoh_interface.get_subscriber("IMAGE_DATA")
+    try:
+        raw_any_subscriber = zenoh_interface.get_subscriber("IMAGE_DATA")
+    except KeyError:
+        raw_any_subscriber = None
+        logging.warning("No subscriber found for IMAGE_DATA. Skipping subscriber loop.")
     detections_publisher = zenoh_interface.get_publisher("BOUNDING_BOXES")
     detections_provider = zenoh_interface.get_provider("DETECTIONS")
 
@@ -199,11 +206,14 @@ def main():
     threading.Thread(target=serve_detections, daemon=True).start()
 
     # Blocking subscriber loop for images
-    for sample in raw_any_subscriber:
-        msg = image_raw_any_encoder.decode(sample.payload.to_bytes())
-        detections = detections_callback(msg)
-        detections_encoded = boxes_encoder.encode(detections)
-        detections_publisher.put(payload=detections_encoded)
+    if raw_any_subscriber is not None:
+        for sample in raw_any_subscriber:
+            msg = image_raw_any_encoder.decode(sample.payload.to_bytes())
+            detections = detections_callback(msg)
+            detections_encoded = boxes_encoder.encode(detections)
+            detections_publisher.put(payload=detections_encoded)
+    else:
+        logging.info("No IMAGE_DATA subscriber loop started.")
 
 
 if __name__ == "__main__":
