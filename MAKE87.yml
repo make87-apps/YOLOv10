@@ -1,28 +1,46 @@
-build_kit:
-  name: python3
-  version: latest
-inbound_topics:
-  - name: IMAGE_DATA
-    message_type: make87_messages.image.compressed.image_jpeg.ImageJPEG
-outbound_topics:
-  - name: BOUNDING_BOXES
-    message_type: make87_messages.detection.box.boxes_2d_aligned.Boxes2DAxisAligned/a
-provider_endpoints:
-  - name: DETECTIONS
-    requester_message_type: make87_messages.image.compressed.image_jpeg.ImageJPEG
-    provider_message_type: make87_messages.detection.box.boxes_2d_aligned.Boxes2DAxisAligned/a
-  - name: MODEL_ONTOLOGY
-    requester_message_type: make87_messages.core.Empty
-    provider_message_type: make87_messages.detection.ontology.ModelOntology
+version: 1
+interfaces:
+  - name: zenoh-client
+    protocol: zenoh
+    default_port:
+      name: zenoh-client
+      protocol: TCP
+      target_port: 7447
+    subscribers:
+      - name: IMAGE_DATA
+        spec:
+          make87_message: make87_messages.image.uncompressed.ImageRawAny
+        encoding: proto
+    publishers:
+      - name: BOUNDING_BOXES
+        spec:
+          make87_message: make87_messages.detection.box.Boxes2DAxisAligned
+        encoding: proto
+    providers:
+      - name: DETECTIONS
+        request_spec:
+          make87_message: make87_messages.image.uncompressed.ImageRawAny
+        response_spec:
+          make87_message: make87_messages.detection.box.Boxes2DAxisAligned
+        encoding: proto
+      - name: MODEL_ONTOLOGY
+        request_spec:
+          make87_message: make87_messages.core.Empty
+        response_spec:
+          make87_message: make87_messages.detection.ontology.ModelOntology
+        encoding: proto
 config:
-  values:
-    - name: BOXES_ENTITY_NAME
+  type: object
+  properties:
+    BOXES_ENTITY_NAME:
+      type: string
+      default: boxes
       description: "The name to append to the source entity path"
-      default_value: "boxes"
-      required: false
-      secret: false
-    - name: CONFIDENCE_THRESHOLD
+    CONFIDENCE_THRESHOLD:
+      type: number
+      default: 0.6
       description: "The minimum confidence threshold for a detection to be considered valid. Default: 0.6"
-      default_value: "0.6"
-      required: false
-      secret: false
+build:
+  build_kit:
+    name: python3
+

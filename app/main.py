@@ -3,59 +3,50 @@ from importlib.resources import files
 from pathlib import Path
 
 import cv2
-import make87
 import numpy as np
 import onnxruntime
-from make87_messages.core.empty_pb2 import Empty
+from make87.config import load_config_from_env
+from make87.encodings import ProtobufEncoder
+from make87.interfaces.zenoh import ZenohInterface
+import threading
 from make87_messages.core.header_pb2 import Header
-from make87_messages.detection.box.boxes_2d_pb2 import Boxes2DAxisAligned
 from make87_messages.detection.box.box_2d_pb2 import Box2DAxisAligned
-from make87_messages.geometry.box.box_2d_aligned_pb2 import Box2DAxisAligned as Box2DAxisAlignedGeometry
+from make87_messages.detection.box.boxes_2d_pb2 import Boxes2DAxisAligned
 from make87_messages.detection.ontology.model_ontology_pb2 import ModelOntology
-from make87_messages.image.compressed.image_jpeg_pb2 import ImageJPEG
+from make87_messages.geometry.box.box_2d_aligned_pb2 import Box2DAxisAligned as Box2DAxisAlignedGeometry
+from make87_messages.image.uncompressed.any_pb2 import ImageRawAny
 
 
 class YOLOv10:
-
-    def __init__(self, path: Path, conf_thres: float = 0.2):
-
+    def __init__(self, path: Path, conf_thres: float = 0.2, provider="CPUExecutionProvider"):
         self.conf_threshold = conf_thres
 
         available_providers = onnxruntime.get_available_providers()
-        # only keep providers with "CPU" in the name until gpu mount is properly supported
-        available_providers = [provider for provider in available_providers if "CPU" in provider]
-        print(f"Available providers: {available_providers}")
-        # Initialize model
-        self.session = onnxruntime.InferenceSession(path, providers=available_providers)
+        # Prefer CUDA if available, fallback to CPU
+        if provider == "CUDAExecutionProvider" and "CUDAExecutionProvider" in available_providers:
+            providers = ["CUDAExecutionProvider"]
+        else:
+            providers = ["CPUExecutionProvider"]
+        self.session = onnxruntime.InferenceSession(str(path), providers=providers)
 
-        # Get model info
         self.get_input_details()
         self.get_output_details()
 
-    def __call__(self, image: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    def __call__(self, image: np.ndarray):
         return self.detect_objects(image)
 
-    def detect_objects(self, image: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    def detect_objects(self, image: np.ndarray):
         input_tensor = self.prepare_input(image)
-
-        # Perform inference on the image
         outputs = self.inference(input_tensor)
-
         return self.process_output(outputs[0])
 
-    def prepare_input(self, image: np.ndarray) -> np.ndarray:
+    def prepare_input(self, image: np.ndarray):
         self.img_height, self.img_width = image.shape[:2]
-
         input_img = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-
-        # Resize input image
         input_img = cv2.resize(input_img, (self.input_width, self.input_height))
-
-        # Scale input pixel values to 0 to 1
         input_img = input_img / 255.0
         input_img = input_img.transpose(2, 0, 1)
         input_tensor = input_img[np.newaxis, :, :, :].astype(np.float32)
-
         return input_tensor
 
     def inference(self, input_tensor):
@@ -67,15 +58,11 @@ class YOLOv10:
         boxes = output[:, :-2]
         confidences = output[:, -2]
         class_ids = output[:, -1].astype(int)
-
         mask = confidences > self.conf_threshold
         boxes = boxes[mask, :]
         confidences = confidences[mask]
         class_ids = class_ids[mask]
-
-        # Rescale boxes to original image dimensions
         boxes = self.rescale_boxes(boxes)
-
         return class_ids, boxes, confidences
 
     def rescale_boxes(self, boxes):
@@ -87,7 +74,6 @@ class YOLOv10:
     def get_input_details(self):
         model_inputs = self.session.get_inputs()
         self.input_names = [model_inputs[i].name for i in range(len(model_inputs))]
-
         input_shape = model_inputs[0].shape
         self.input_height = input_shape[2] if isinstance(input_shape[2], int) else 640
         self.input_width = input_shape[3] if isinstance(input_shape[3], int) else 640
@@ -97,35 +83,65 @@ class YOLOv10:
         self.output_names = [model_outputs[i].name for i in range(len(model_outputs))]
 
 
+def extract_image_from_raw_any(msg: ImageRawAny) -> np.ndarray:
+    """Extracts a numpy image from ImageRawAny message, converting YUV to BGR if needed."""
+    if msg.HasField("rgb888"):
+        arr = np.frombuffer(msg.rgb888.data, dtype=np.uint8).reshape((msg.rgb888.height, msg.rgb888.width, 3))
+        return arr
+    elif msg.HasField("rgba8888"):
+        arr = np.frombuffer(msg.rgba8888.data, dtype=np.uint8).reshape((msg.rgba8888.height, msg.rgba8888.width, 4))
+        return arr
+    elif msg.HasField("yuv420"):
+        h, w = msg.yuv420.height, msg.yuv420.width
+        yuv = np.frombuffer(msg.yuv420.data, dtype=np.uint8)
+        # YUV420p: Y plane (h*w), U (h/2*w/2), V (h/2*w/2)
+        yuv = yuv.reshape((h * 3 // 2, w))
+        bgr = cv2.cvtColor(yuv, cv2.COLOR_YUV2BGR_I420)
+        return bgr
+    elif msg.HasField("yuv422"):
+        h, w = msg.yuv422.height, msg.yuv422.width
+        yuv = np.frombuffer(msg.yuv422.data, dtype=np.uint8)
+        # YUV422p: Y plane (h*w), U (h*w/2), V (h*w/2)
+        yuv = yuv.reshape((h * 2, w))
+        bgr = cv2.cvtColor(yuv, cv2.COLOR_YUV2BGR_Y422)
+        return bgr
+    elif msg.HasField("yuv444"):
+        h, w = msg.yuv444.height, msg.yuv444.width
+        yuv = np.frombuffer(msg.yuv444.data, dtype=np.uint8)
+        # YUV444p: Y plane (h*w), U (h*w), V (h*w)
+        yuv = yuv.reshape((h * 3, w))
+        bgr = cv2.cvtColor(yuv, cv2.COLOR_YUV2BGR)
+        return bgr
+    else:
+        raise ValueError("No supported image format found in ImageRawAny")
+
+
 def main():
-    make87.initialize()
-    boxes_entity_name = make87.get_config_value("BOXES_ENTITY_NAME", "boxes", str)
-    conf_threshold = make87.get_config_value("CONFIDENCE_THRESHOLD", 0.6, float)
+    application_config = load_config_from_env()
+    image_raw_any_encoder = ProtobufEncoder(ImageRawAny)
+    ontology_encoder = ProtobufEncoder(ModelOntology)
+    boxes_encoder = ProtobufEncoder(Boxes2DAxisAligned)
+    zenoh_interface = ZenohInterface("zenoh-client")
 
-    ontology_endpoint = make87.get_provider(
-        name="MODEL_ONTOLOGY", requester_message_type=Empty, provider_message_type=ModelOntology
-    )
+    # Configuration values
+    boxes_entity_name = application_config.config.get("BOXES_ENTITY_NAME", "boxes")
+    conf_threshold = float(application_config.config.get("CONFIDENCE_THRESHOLD", 0.6))
 
-    jpeg_subscriber = make87.get_subscriber(name="IMAGE_DATA", message_type=ImageJPEG)
-    detections_publisher = make87.get_publisher(name="BOUNDING_BOXES", message_type=Boxes2DAxisAligned)
+    # Providers / Subscribers / Publishers
+    ontology_provider = zenoh_interface.get_provider("MODEL_ONTOLOGY")
+    raw_any_subscriber = zenoh_interface.get_subscriber("IMAGE_DATA")
+    detections_publisher = zenoh_interface.get_publisher("BOUNDING_BOXES")
+    detections_provider = zenoh_interface.get_provider("DETECTIONS")
 
-    detections_endpoint = make87.get_provider(
-        name="DETECTIONS", requester_message_type=ImageJPEG, provider_message_type=Boxes2DAxisAligned
-    )
-
-    # Access the 'preprocessor_config.json' file within 'app.hf' package
-    yolov10onnx = files("app") / "hf" / "yolov10b.onnx"
-    yolov10onnx = Path(str(yolov10onnx))
-
-    yolov10config = files("app") / "hf" / "config.json"
-    yolov10config = Path(str(yolov10config))
-
+    # Load model and config
+    yolov10onnx = Path(files("app") / "hf" / "yolov10b.onnx")
+    yolov10config = Path(files("app") / "hf" / "config.json")
     detector = YOLOv10(yolov10onnx, conf_thres=conf_threshold)
     with open(yolov10config) as f:
         config = json.load(f)
 
-    # Setup ontology provider
-    def ontology_callback(message: Empty) -> ModelOntology:
+    # Ontology provider
+    def ontology_callback():
         header = Header()
         header.timestamp.GetCurrentTime()
         class_entries = [
@@ -137,24 +153,21 @@ def main():
         ]
         return ModelOntology(header=header, classes=class_entries)
 
-    ontology_endpoint.provide(ontology_callback)
+    def serve_ontology():
+        while True:
+            with ontology_provider.recv() as query:
+                response = ontology_callback()
+                response_encoded = ontology_encoder.encode(response)
+                query.reply(key_expr=query.key_expr, payload=response_encoded)
 
-    # Setup pub/sub + provider
-    def detections_callback(message: ImageJPEG) -> Boxes2DAxisAligned:
-        # Convert message data to an image
-        jpeg_array = np.frombuffer(message.data, dtype=np.uint8)
-        image = cv2.imdecode(jpeg_array, cv2.IMREAD_UNCHANGED)
-
-        # Run detection on the image
+    # Detection provider
+    def detections_callback(message: ImageRawAny) -> Boxes2DAxisAligned:
+        image = extract_image_from_raw_any(message)
+        # Always pass BGR or RGB image to detector
         class_ids, boxes, confidences = detector(np.array(image))
-
-        header = make87.header_from_message(
-            Header,
-            message=message,
-            append_entity_path=boxes_entity_name,
-        )
-
-        # Create the detection message
+        header = Header()
+        header.CopyFrom(message.header)
+        header.entity_path = message.header.entity_path + f"/{boxes_entity_name}"
         boxes2d = Boxes2DAxisAligned(
             header=header,
             boxes=[
@@ -166,18 +179,31 @@ def main():
                         width=box[2] - box[0],
                         height=box[3] - box[1],
                     ),
-                    confidence=confidence,
-                    class_id=class_id,
+                    confidence=float(confidence),
+                    class_id=int(class_id),
                 )
                 for box, class_id, confidence in zip(boxes, class_ids, confidences)
             ],
         )
         return boxes2d
 
-    jpeg_subscriber.subscribe(lambda msg: detections_publisher.publish(detections_callback(msg)))
-    detections_endpoint.provide(detections_callback)
+    def serve_detections():
+        while True:
+            with detections_provider.recv() as query:
+                request = image_raw_any_encoder.decode(query.payload.to_bytes())
+                response = detections_callback(request)
+                response_encoded = boxes_encoder.encode(response)
+                query.reply(key_expr=query.key_expr, payload=response_encoded)
 
-    make87.loop()
+    threading.Thread(target=serve_ontology, daemon=True).start()
+    threading.Thread(target=serve_detections, daemon=True).start()
+
+    # Blocking subscriber loop for images
+    for sample in raw_any_subscriber:
+        msg = image_raw_any_encoder.decode(sample.payload.to_bytes())
+        detections = detections_callback(msg)
+        detections_encoded = boxes_encoder.encode(detections)
+        detections_publisher.put(payload=detections_encoded)
 
 
 if __name__ == "__main__":
