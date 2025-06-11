@@ -202,18 +202,21 @@ def main():
                 response_encoded = boxes_encoder.encode(response)
                 query.reply(key_expr=query.key_expr, payload=response_encoded)
 
-    threading.Thread(target=serve_ontology, daemon=True).start()
-    threading.Thread(target=serve_detections, daemon=True).start()
+    ontology_thread = threading.Thread(target=serve_ontology)
+    detections_thread = threading.Thread(target=serve_detections)
+    ontology_thread.start()
+    detections_thread.start()
 
-    # Blocking subscriber loop for images
-    if raw_any_subscriber is not None:
-        for sample in raw_any_subscriber:
-            msg = image_raw_any_encoder.decode(sample.payload.to_bytes())
-            detections = detections_callback(msg)
-            detections_encoded = boxes_encoder.encode(detections)
-            detections_publisher.put(payload=detections_encoded)
-    else:
-        logging.info("No IMAGE_DATA subscriber loop started.")
+    try:
+        if raw_any_subscriber is not None:
+            for sample in raw_any_subscriber:
+                msg = image_raw_any_encoder.decode(sample.payload.to_bytes())
+                detections_publisher.put(
+                    payload=boxes_encoder.encode(detections_callback(msg))
+                )
+    finally:
+        ontology_thread.join()
+        detections_thread.join()
 
 
 if __name__ == "__main__":
