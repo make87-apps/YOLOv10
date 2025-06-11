@@ -43,4 +43,6 @@ config:
 build:
   build_kit:
     name: python3
-
+dev_build:
+  build_kit:
+    name: python3
