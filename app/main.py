@@ -86,7 +86,7 @@ class YOLOv10:
 
 
 def extract_image_from_raw_any(msg: ImageRawAny) -> np.ndarray:
-    """Extracts a numpy image from ImageRawAny message, converting YUV to BGR if needed."""
+    """Extracts a numpy image from ImageRawAny message, converting YUV/NV12 to BGR if needed."""
     if msg.HasField("rgb888"):
         arr = np.frombuffer(msg.rgb888.data, dtype=np.uint8).reshape((msg.rgb888.height, msg.rgb888.width, 3))
         return arr
@@ -99,6 +99,13 @@ def extract_image_from_raw_any(msg: ImageRawAny) -> np.ndarray:
         # YUV420p: Y plane (h*w), U (h/2*w/2), V (h/2*w/2)
         yuv = yuv.reshape((h * 3 // 2, w))
         bgr = cv2.cvtColor(yuv, cv2.COLOR_YUV2BGR_I420)
+        return bgr
+    elif msg.HasField("nv12"):
+        h, w = msg.nv12.height, msg.nv12.width
+        nv12 = np.frombuffer(msg.nv12.data, dtype=np.uint8)
+        # NV12: Y plane (h*w), interleaved UV plane ((h/2)*w)
+        nv12 = nv12.reshape((h * 3 // 2, w))
+        bgr = cv2.cvtColor(nv12, cv2.COLOR_YUV2BGR_NV12)
         return bgr
     elif msg.HasField("yuv422"):
         h, w = msg.yuv422.height, msg.yuv422.width
