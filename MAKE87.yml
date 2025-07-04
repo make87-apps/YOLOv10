@@ -51,16 +51,12 @@ variants:
     build:
       custom:
         dockerfile: ./build_kits/openvino.dockerfile
-        args:
-          EXTRAS: "openvino"
         platforms:
           - linux/amd64
-  cuda-12.4.1:
+  cuda-12_4_1:
     build:
       custom:
         dockerfile: ./build_kits/cuda-12.4.1.dockerfile
-        args:
-          EXTRAS: "gpu"
         platforms:
           - linux/amd64
     peripheral_requirements:
