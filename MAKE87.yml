@@ -46,3 +46,23 @@ build:
 dev_build:
   build_kit:
     name: python3
+variants:
+  openvino:
+    build:
+      custom:
+        dockerfile: ./build_kits/openvino.dockerfile
+        args:
+          EXTRAS: "openvino"
+        platforms:
+          - linux/amd64
+  cuda-12.4.1:
+    build:
+      custom:
+        dockerfile: ./build_kits/cuda-12.4.1.dockerfile
+        args:
+          EXTRAS: "gpu"
+        platforms:
+          - linux/amd64
+    peripheral_requirements:
+      - name: GPU
+        peripheral_type: GPU

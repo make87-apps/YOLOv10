@@ -9,7 +9,7 @@ authors = [
     { name = "Nisse Knudsen", email = "nisse@make87.com" },
 ]
 dependencies = [
-    "make87[zenoh,protobuf]>=0.1.0-dev2",
+    "make87[zenoh,protobuf]>=0.1.0-dev6",
     "make87_messages",
     "onnxruntime",
     "opencv-python-headless>=4.10.0,<5.0.0",
@@ -19,6 +19,13 @@ description = "A small example package"
 readme = "README.md"
 requires-python = ">=3.9,<3.13"
 
+[project.optional-dependencies]
+gpu = [
+    "onnxruntime-gpu"
+]
+openvino = [
+    "onnxruntime-openvino"
+]
 
 [tool.setuptools.packages.find]
 where = ["."]

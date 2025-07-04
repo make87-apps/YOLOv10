@@ -1,6 +1,7 @@
 import json
 from importlib.resources import files
 from pathlib import Path
+import os
 
 import cv2
 import numpy as np
@@ -26,6 +27,8 @@ class YOLOv10:
         # Prefer CUDA if available, fallback to CPU
         if provider == "CUDAExecutionProvider" and "CUDAExecutionProvider" in available_providers:
             providers = ["CUDAExecutionProvider"]
+        elif provider == "OpenVINOExecutionProvider" and "OpenVINOExecutionProvider" in available_providers:
+            providers = ["OpenVINOExecutionProvider"]
         else:
             providers = ["CPUExecutionProvider"]
         logging.info(f"Available providers: {available_providers}, using: {providers}")
@@ -143,7 +146,10 @@ def main():
     # Load model and config
     yolov10onnx = Path(files("app") / "hf" / "yolov10b.onnx")
     yolov10config = Path(files("app") / "hf" / "config.json")
-    detector = YOLOv10(yolov10onnx, conf_thres=conf_threshold)
+
+    # Determine ONNX execution provider from environment
+    provider = os.environ.get("ONNX_PROVIDER", "CPUExecutionProvider")
+    detector = YOLOv10(yolov10onnx, conf_thres=conf_threshold, provider=provider)
     with open(yolov10config) as f:
         config = json.load(f)
 
@@ -211,9 +217,7 @@ def main():
         if raw_any_subscriber is not None:
             for sample in raw_any_subscriber:
                 msg = image_raw_any_encoder.decode(sample.payload.to_bytes())
-                detections_publisher.put(
-                    payload=boxes_encoder.encode(detections_callback(msg))
-                )
+                detections_publisher.put(payload=boxes_encoder.encode(detections_callback(msg)))
     finally:
         ontology_thread.join()
         detections_thread.join()
